@@ -1,34 +1,28 @@
-# AstroNvim Template
+# astrovim-config
 
-**NOTE:** This is for AstroNvim v6+
+Personal [AstroNvim](https://github.com/AstroNvim/AstroNvim) v6 config for Windows, with an in-editor cheat sheet.
 
-A template for getting started with [AstroNvim](https://github.com/AstroNvim/AstroNvim)
+## Requirements
 
-## 🛠️ Installation
+- Neovim 0.11+ and Git
+- A [Nerd Font](https://www.nerdfonts.com/) set in your terminal
+- `ripgrep` and `fd` for search
+- `lazygit` for the git UI: `winget install JesseDuffield.lazygit`
 
-#### Make a backup of your current nvim and shared folder
+## Install
 
-```shell
-mv ~/.config/nvim ~/.config/nvim.bak
-mv ~/.local/share/nvim ~/.local/share/nvim.bak
-mv ~/.local/state/nvim ~/.local/state/nvim.bak
-mv ~/.cache/nvim ~/.cache/nvim.bak
-```
+PowerShell:
 
-#### Create a new user repository from this template
-
-Press the "Use this template" button above to create a new repository to store your user configuration.
-
-You can also just clone this repository directly if you do not want to track your user configuration in GitHub.
-
-#### Clone the repository
-
-```shell
-git clone https://github.com/<your_user>/<your_repository> ~/.config/nvim
-```
-
-#### Start Neovim
-
-```shell
+```powershell
+git clone https://github.com/Svygzhryr/astrovim-config.git $env:LOCALAPPDATA\nvim-astro
+[Environment]::SetEnvironmentVariable("NVIM_APPNAME", "nvim-astro", "User")  # restart the terminal after
 nvim
 ```
+
+Plugins install on first launch. To make this your default config instead, clone to `$env:LOCALAPPDATA\nvim` and skip the `NVIM_APPNAME` line.
+
+## Use
+
+- `Space ?` opens the cheat sheet (fuzzy search); `Space f ?` opens the full page.
+- Add or edit entries in `lua/cheatsheet.lua`.
+- Update plugins with `Space p u`.
