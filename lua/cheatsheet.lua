@@ -157,7 +157,7 @@ M.sections = {
       { "neogit: r", "Rebase popup: i interactive, u upstream, e elsewhere; then c continue / s skip / a abort" },
       { "CLI (F7 terminal)", "git rebase -i HEAD~5 | git pull --rebase | git commit --fixup <sha>" },
       { "CLI: --continue|--skip|--abort", "git rebase --continue / --skip / --abort" },
-      { "CLI: todo editor is nvim", "cw then p/r/e/s/f/d to change action; ddp to reorder; :wq to start; :cq to ABORT the rebase" },
+      { "CLI: rebase -i todo editor (core.editor)", "(vim keys; set core.editor=nvim, see README) cw then p/r/e/s/f/d to change action; ddp to reorder; :wq to start; :cq to ABORT the rebase" },
       { "CLI: panic button", "git reflog ; git reset --hard ORIG_HEAD   (undo a finished bad rebase)" },
     },
   },
