@@ -15,3 +15,21 @@ do
   end
   vim.opt.langmap = table.concat(pairs_, ",")
 end
+
+-- Windows: when nvim is launched from Git Bash, $SHELL=/bin/bash.exe makes nvim use bash
+-- with cmd-style flags (`bash /s /c ...`), so :terminal / lazygit / :! die instantly.
+-- Pin cmd.exe with its matching flags.
+if vim.fn.has "win32" == 1 then
+  vim.o.shell = "cmd.exe"
+  vim.o.shellcmdflag = "/s /c"
+  vim.o.shellquote = ""
+  vim.o.shellxquote = '"'
+  vim.o.shellredir = ">%s 2>&1"
+  vim.o.shellpipe = "2>&1| tee"
+end
+
+-- Open the file explorer on startup, keeping focus in the editor.
+vim.api.nvim_create_autocmd("VimEnter", {
+  desc = "Open Neo-tree on startup",
+  callback = function() vim.schedule(function() pcall(vim.cmd, "Neotree show") end) end,
+})

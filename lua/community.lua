@@ -6,6 +6,10 @@
 return {
   "AstroNvim/astrocommunity",
   { import = "astrocommunity.pack.lua" },
+  -- git diff viewer / status UI (with rebase popup), and task runner
+  { import = "astrocommunity.git.diffview-nvim" },
+  { import = "astrocommunity.git.neogit" },
+  { import = "astrocommunity.code-runner.overseer-nvim" },
   -- colorschemes
   { import = "astrocommunity.colorscheme.monokai-pro-nvim" },
   { import = "astrocommunity.colorscheme.neofusion-nvim" },
