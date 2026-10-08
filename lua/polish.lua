@@ -57,6 +57,24 @@ vim.api.nvim_create_autocmd("VimEnter", {
   end,
 })
 
+-- Terminal mode ignores 'langmap', so lazygit (a terminal buffer) receives raw Cyrillic. Translate
+-- Russian-layout keys to their Latin twins, only inside lazygit terminals so shells still type Russian.
+do
+  local function chars(s) return vim.fn.split(s, "\\zs") end
+  local ru = vim.list_extend(chars "ёйцукенгшщзхъфывапролджэячсмитьбю", chars "ЁЙЦУКЕНГШЩЗХЪФЫВАПРОЛДЖЭЯЧСМИТЬБЮ")
+  local en = vim.list_extend(chars "`qwertyuiop[]asdfghjkl;'zxcvbnm,.", chars '~QWERTYUIOP{}ASDFGHJKL:"ZXCVBNM<>')
+
+  vim.api.nvim_create_autocmd("TermOpen", {
+    desc = "Russian-layout keys inside lazygit",
+    callback = function(ev)
+      if not vim.api.nvim_buf_get_name(ev.buf):find("lazygit", 1, true) then return end
+      for i, from in ipairs(ru) do
+        vim.keymap.set("t", from, en[i], { buffer = ev.buf, nowait = true })
+      end
+    end,
+  })
+end
+
 -- langmap doesn't carry through multi-key mappings (<Leader>gg etc.): after the first key the second
 -- one is looked up untranslated. Mirror every <Leader> mapping with its Russian-layout spelling.
 do
