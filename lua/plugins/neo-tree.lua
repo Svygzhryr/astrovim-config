@@ -6,6 +6,17 @@ return {
     -- `git status` over a huge worktree is the main stall; run it async with a bounded batch size
     git_status_async = true,
     git_status_async_options = { batch_size = 1000, batch_delay = 10, max_lines = 10000 },
+    -- default is `--ignored=traditional`, which makes git walk every ignored dir in the repo
+    event_handlers = {
+      {
+        event = "before_git_status",
+        handler = function(args)
+          for i, a in ipairs(args.status_args) do
+            if a:find("^%-%-ignored=") then args.status_args[i] = "--ignored=no" end
+          end
+        end,
+      },
+    },
     filesystem = {
       use_libuv_file_watcher = true,
       filtered_items = {

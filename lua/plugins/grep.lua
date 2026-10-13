@@ -7,8 +7,19 @@ return {
     picker = {
       sources = {
         grep = {
-          -- skip huge files (art, logs, dumps) without reading them
-          args = { "--max-filesize", "2M" },
+          -- snacks only *throttles* live input (200ms, fires on the first keystroke), so typing
+          -- "foobar" spawns ~6 rg processes over the whole repo. Real debounce + min length instead:
+          -- the finder sleeps first, and a newer keystroke aborts the coroutine before rg starts.
+          finder = function(opts, ctx)
+            if #ctx.filter.search < 3 then return function() end end
+            local run = require("snacks.picker.source.grep").grep(opts, ctx)
+            return function(cb)
+              ctx.async:sleep(350)
+              return run(cb)
+            end
+          end,
+          -- skip huge files (art, logs, dumps) without reading them; cap threads so rg can't saturate the disk
+          args = { "--max-filesize", "2M", "--threads", "4" },
           exclude = {
             "*.log", "*.log.*", "logs/",
             -- binary art / data: never useful to grep, expensive to scan

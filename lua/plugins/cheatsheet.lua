@@ -20,7 +20,7 @@ return {
           ["<Leader>rr"] = { function() require("runner").run() end, desc = "Run current file" },
           ["<Leader>rs"] = { function() require("runner").toggle_on_save() end, desc = "Toggle run on save" },
 
-          ["<Leader>gD"] = { "<Cmd>DiffviewOpen<CR>", desc = "Diff view (all changes)" },
+          ["<Leader>gD"] = { "<Cmd>DiffviewOpen --untracked-files=no<CR>", desc = "Diff view (tracked changes, fast)" },
           ["<Leader>gb"] = {
             function()
               -- working tree vs merge-base with the remote default branch (right side stays editable)
