@@ -1,2 +1,6 @@
 # Proprietary language support (local only)
 /proprietary/
+
+# private project data
+lua/wows.lua
+lua/plugins/wows.lua

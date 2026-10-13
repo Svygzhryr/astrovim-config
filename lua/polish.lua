@@ -127,3 +127,7 @@ do
     end,
   })
 end
+
+-- Fixed RPC pipe so external tools (lazygit) can open files as tabs in this instance.
+-- Only the first Astro instance gets it; later ones fail silently.
+if vim.fn.has "win32" == 1 then pcall(vim.fn.serverstart, [[\\.\pipe\astro-nvim]]) end
