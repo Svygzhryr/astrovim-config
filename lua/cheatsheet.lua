@@ -136,6 +136,7 @@ M.sections = {
     items = {
       { "<Leader>gg", "Lazygit (full git TUI). q quits, ? shows its keys" },
       { "<Leader>gD", "Diff view of all changes (<Leader>gq closes)" },
+      { "<Leader>uB", "Toggle inline git blame (author, date, subject on cursor line)" },
       { "]g  [g", "Next / previous changed hunk in file" },
       { "F7", "Toggle floating terminal" },
       { "Ctrl+\\ Ctrl+n", "Leave terminal insert mode (to scroll / copy)" },

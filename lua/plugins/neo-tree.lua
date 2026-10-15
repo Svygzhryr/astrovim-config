@@ -4,6 +4,8 @@ return {
   "nvim-neo-tree/neo-tree.nvim",
   opts = {
     -- `git status` over a huge worktree is the main stall; run it async with a bounded batch size
+    -- minimap is now a real split; never open files into it (caused flicker + a full-screen tree)
+    open_files_do_not_replace_types = { "terminal", "Trouble", "qf", "edgy", "neominimap" },
     git_status_async = true,
     git_status_async_options = { batch_size = 1000, batch_delay = 10, max_lines = 10000 },
     -- default is `--ignored=traditional`, which makes git walk every ignored dir in the repo

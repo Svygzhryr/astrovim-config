@@ -43,16 +43,16 @@ do
   end
 end
 
--- Restore the last session (cwd, buffers, layout) when started without file arguments.
--- AstroNvim already autosaves "Last Session" on exit; it just never loads it automatically.
+-- Restore the session of the directory nvim was launched in (alpha vs beta checkouts must not mix).
+-- AstroNvim autosaves a per-cwd "dirsession" on exit; "Last Session" would restore the other checkout's cwd.
 vim.api.nvim_create_autocmd("VimEnter", {
-  desc = "Restore last session",
+  desc = "Restore session for launch directory",
   callback = function()
     if vim.fn.argc() > 0 or vim.g.started_with_stdin then return end
     -- wait for the Neo-tree startup autocmd to finish before swapping buffers/windows
     vim.defer_fn(function()
       local ok, resession = pcall(require, "resession")
-      if ok then pcall(resession.load, "Last Session", { silence_errors = true }) end
+      if ok then pcall(resession.load, vim.uv.cwd(), { dir = "dirsession", silence_errors = true }) end
     end, 150)
   end,
 })
@@ -131,3 +131,29 @@ end
 -- Fixed RPC pipe so external tools (lazygit) can open files as tabs in this instance.
 -- Only the first Astro instance gets it; later ones fail silently.
 if vim.fn.has "win32" == 1 then pcall(vim.fn.serverstart, [[\\.\pipe\astro-nvim]]) end
+
+-- Stale .git/index.lock: background `git status` (neo-tree, gitsigns, diffview) takes the index lock
+-- just to refresh stat info, and if nvim exits/crashes mid-run the lock file is left behind.
+-- Optional locks make those read-only calls skip the lock; real writes (stage, commit) still lock.
+-- Inherited by every git child process, including lazygit started from a terminal in this instance.
+vim.env.GIT_OPTIONAL_LOCKS = "0"
+
+-- Closing every buffer leaves Neo-tree as the only window and it stretches to full width (it has
+-- 'winfixwidth', so it keeps that width). The next file then opens in a sliver beside it. Restore
+-- the tree's normal width as soon as another window exists.
+vim.api.nvim_create_autocmd({ "WinNew", "BufWinEnter", "WinResized" }, {
+  desc = "Reset stretched Neo-tree width",
+  callback = function()
+    vim.schedule(function()
+      local wins = vim.tbl_filter(function(w) return vim.api.nvim_win_get_config(w).relative == "" end,
+        vim.api.nvim_tabpage_list_wins(0))
+      if #wins < 2 then return end
+      for _, w in ipairs(wins) do
+        local b = vim.api.nvim_win_get_buf(w)
+        if vim.bo[b].filetype == "neo-tree" and vim.api.nvim_win_get_width(w) > 50 then
+          pcall(vim.api.nvim_win_set_width, w, 40)
+        end
+      end
+    end)
+  end,
+})
