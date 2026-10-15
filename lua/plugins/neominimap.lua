@@ -20,7 +20,12 @@ return {
     vim.g.neominimap = {
       git = { enabled = true, mode = "line" },
       auto_enable = true,
-      layout = "float",
+      layout = "split", -- real window: reserves space instead of covering text
+      split = {
+        minimap_width = 14,
+        fix_width = true,
+        direction = "right",
+      },
       float = {
         minimap_width = 14,
         window_border = "none",

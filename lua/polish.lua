@@ -157,3 +157,29 @@ vim.api.nvim_create_autocmd({ "WinNew", "BufWinEnter", "WinResized" }, {
     end)
   end,
 })
+
+-- Never leave a tab with only Neo-tree/minimap windows: when the last editor window goes away
+-- (e.g. "close all buffers"), open an empty one next to the tree so the layout can't collapse.
+do
+  local sidebar = { ["neo-tree"] = true, neominimap = true }
+  local function ensure_editor_window()
+    local tree, editor
+    for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
+      if vim.api.nvim_win_get_config(w).relative == "" then
+        local ft = vim.bo[vim.api.nvim_win_get_buf(w)].filetype
+        if ft == "neo-tree" then tree = w elseif not sidebar[ft] then editor = w end
+      end
+    end
+    if tree and not editor then
+      local cur = vim.api.nvim_get_current_win()
+      vim.api.nvim_set_current_win(tree)
+      vim.cmd "rightbelow vertical new" -- empty buffer in a new window to the right of the tree
+      vim.api.nvim_win_set_width(tree, 40)
+      if cur ~= tree and vim.api.nvim_win_is_valid(cur) then pcall(vim.api.nvim_set_current_win, cur) end
+    end
+  end
+  vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout", "WinClosed" }, {
+    desc = "Keep one editor window next to Neo-tree",
+    callback = function() vim.defer_fn(ensure_editor_window, 50) end,
+  })
+end
