@@ -127,8 +127,10 @@ M.sections = {
       { "<Leader>o", "Jump between explorer and editor" },
       { "explorer: a", "New file (end with / for a folder)" },
       { "explorer: r  d", "Rename / delete" },
-      { "explorer: c  x  p", "Copy / cut / paste" },
+      { "explorer: c  m  p", "Copy / move / paste" },
       { "explorer: H  ?", "Toggle hidden files / show all explorer keys" },
+      { "explorer: gc", "Toggle changed (git) files only" },
+      { "explorer: ]g  [g", "Next / previous changed file" },
     },
   },
   {

@@ -31,7 +31,7 @@ return {
         window_border = "none",
       },
       click = { enabled = true, auto_switch_focus = false }, -- click on the map jumps to that line
-      exclude_filetypes = { "help", "neo-tree", "toggleterm", "DiffviewFiles", "TelescopePrompt" },
+      exclude_filetypes = { "help", "snacks_picker_list", "toggleterm", "DiffviewFiles", "TelescopePrompt" },
       exclude_buftypes = { "nofile", "nowrite", "quickfix", "terminal", "prompt" },
     }
   end,

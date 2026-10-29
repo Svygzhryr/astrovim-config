@@ -5,6 +5,8 @@ return {
   "folke/snacks.nvim",
   opts = {
     picker = {
+      -- fuzzy matching (file names, symbols, etc.): always case-insensitive, even with capitals in the query
+      matcher = { ignorecase = true, smartcase = false },
       sources = {
         grep = {
           -- snacks only *throttles* live input (200ms, fires on the first keystroke), so typing
@@ -19,7 +21,8 @@ return {
             end
           end,
           -- skip huge files (art, logs, dumps) without reading them; cap threads so rg can't saturate the disk
-          args = { "--max-filesize", "2M", "--threads", "4" },
+          -- --ignore-case overrides snacks' default --smart-case, so capitals in the query don't make rg case-sensitive
+          args = { "--max-filesize", "2M", "--threads", "4", "--ignore-case" },
           exclude = {
             "*.log", "*.log.*", "logs/",
             -- binary art / data: never useful to grep, expensive to scan

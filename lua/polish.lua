@@ -28,12 +28,6 @@ if vim.fn.has "win32" == 1 then
   vim.o.shellpipe = "2>&1| tee"
 end
 
--- Open the file explorer on startup, keeping focus in the editor.
-vim.api.nvim_create_autocmd("VimEnter", {
-  desc = "Open Neo-tree on startup",
-  callback = function() vim.schedule(function() pcall(vim.cmd, "Neotree show") end) end,
-})
-
 -- Proprietary language syntax (Unbound/USS); the dir is gitignored and may be absent.
 do
   local dir = vim.fn.stdpath "config" .. "/proprietary"
@@ -49,7 +43,7 @@ vim.api.nvim_create_autocmd("VimEnter", {
   desc = "Restore session for launch directory",
   callback = function()
     if vim.fn.argc() > 0 or vim.g.started_with_stdin then return end
-    -- wait for the Neo-tree startup autocmd to finish before swapping buffers/windows
+    -- let startup finish before swapping buffers/windows
     vim.defer_fn(function()
       local ok, resession = pcall(require, "resession")
       if ok then pcall(resession.load, vim.uv.cwd(), { dir = "dirsession", silence_errors = true }) end
@@ -132,54 +126,33 @@ end
 -- Only the first Astro instance gets it; later ones fail silently.
 if vim.fn.has "win32" == 1 then pcall(vim.fn.serverstart, [[\\.\pipe\astro-nvim]]) end
 
--- Stale .git/index.lock: background `git status` (neo-tree, gitsigns, diffview) takes the index lock
+-- Stale .git/index.lock: background `git status` (snacks explorer, gitsigns, diffview) takes the index lock
 -- just to refresh stat info, and if nvim exits/crashes mid-run the lock file is left behind.
 -- Optional locks make those read-only calls skip the lock; real writes (stage, commit) still lock.
 -- Inherited by every git child process, including lazygit started from a terminal in this instance.
 vim.env.GIT_OPTIONAL_LOCKS = "0"
 
--- Closing every buffer leaves Neo-tree as the only window and it stretches to full width (it has
--- 'winfixwidth', so it keeps that width). The next file then opens in a sliver beside it. Restore
--- the tree's normal width as soon as another window exists.
-vim.api.nvim_create_autocmd({ "WinNew", "BufWinEnter", "WinResized" }, {
-  desc = "Reset stretched Neo-tree width",
-  callback = function()
-    vim.schedule(function()
-      local wins = vim.tbl_filter(function(w) return vim.api.nvim_win_get_config(w).relative == "" end,
-        vim.api.nvim_tabpage_list_wins(0))
-      if #wins < 2 then return end
-      for _, w in ipairs(wins) do
-        local b = vim.api.nvim_win_get_buf(w)
-        if vim.bo[b].filetype == "neo-tree" and vim.api.nvim_win_get_width(w) > 50 then
-          pcall(vim.api.nvim_win_set_width, w, 40)
-        end
-      end
-    end)
-  end,
-})
+-- Diff freezes: `linematch` (AstroNvim default) aligns lines inside every hunk and can stall for seconds on
+-- big diffs, in diffview and gitsigns alike. Plain histogram diff is enough.
+vim.o.diffopt = vim.o.diffopt:gsub(",?linematch:%d+", "")
 
--- Never leave a tab with only Neo-tree/minimap windows: when the last editor window goes away
--- (e.g. "close all buffers"), open an empty one next to the tree so the layout can't collapse.
+-- Find what is freezing the UI: `:StallProfile` starts a Lua+function profile, run it again to stop and
+-- open the log (sorted by self time; the top entries are the culprits).
 do
-  local sidebar = { ["neo-tree"] = true, neominimap = true }
-  local function ensure_editor_window()
-    local tree, editor
-    for _, w in ipairs(vim.api.nvim_tabpage_list_wins(0)) do
-      if vim.api.nvim_win_get_config(w).relative == "" then
-        local ft = vim.bo[vim.api.nvim_win_get_buf(w)].filetype
-        if ft == "neo-tree" then tree = w elseif not sidebar[ft] then editor = w end
-      end
+  local log = vim.fn.stdpath "cache" .. "/stall-profile.log"
+  local running = false
+  vim.api.nvim_create_user_command("StallProfile", function()
+    if not running then
+      vim.cmd("profile start " .. vim.fn.fnameescape(log))
+      vim.cmd "profile func *"
+      vim.cmd "profile file *"
+      running = true
+      vim.notify "Stall profile started - reproduce the freeze, then run :StallProfile again"
+    else
+      vim.cmd "profile stop"
+      running = false
+      vim.cmd("tabnew " .. vim.fn.fnameescape(log))
+      vim.notify "Stall profile written; see 'FUNCTIONS SORTED ON SELF TIME'"
     end
-    if tree and not editor then
-      local cur = vim.api.nvim_get_current_win()
-      vim.api.nvim_set_current_win(tree)
-      vim.cmd "rightbelow vertical new" -- empty buffer in a new window to the right of the tree
-      vim.api.nvim_win_set_width(tree, 40)
-      if cur ~= tree and vim.api.nvim_win_is_valid(cur) then pcall(vim.api.nvim_set_current_win, cur) end
-    end
-  end
-  vim.api.nvim_create_autocmd({ "BufDelete", "BufWipeout", "WinClosed" }, {
-    desc = "Keep one editor window next to Neo-tree",
-    callback = function() vim.defer_fn(ensure_editor_window, 50) end,
-  })
+  end, { desc = "Toggle the stall profiler" })
 end
