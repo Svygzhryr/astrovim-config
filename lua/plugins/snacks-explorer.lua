@@ -157,10 +157,13 @@ local function detect_base(root, cur, cb)
       end
       if pending == 0 then return finish() end
       for _, name in ipairs(names) do
-        git_async(root, { "rev-list", "--count", "HEAD", "^" .. name }, function(count)
-          count = tonumber(count)
-          -- 0 means `name` already contains HEAD (not a base); ties go to the most similarly named branch
-          if count and count > 0 and (count < best_n
+        git_async(root, { "rev-list", "--left-right", "--count", "HEAD..." .. name }, function(counts)
+          local ahead, behind = (counts or ""):match "^(%d+)%s+(%d+)$"
+          local count = tonumber(ahead)
+          -- ahead == 0 with commits behind means `name` is strictly ahead of HEAD (a child, not a base).
+          -- ahead == 0 and behind == 0 is a branch at the same commit, e.g. a fresh branch cut from it: valid.
+          -- Ties go to the most similarly named branch.
+          if count and (count > 0 or tonumber(behind) == 0) and (count < best_n
             or (count == best_n and common_prefix(name, cur) > common_prefix(best, cur))) then
             best, best_n = name, count
           end
