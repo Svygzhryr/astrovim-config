@@ -17,6 +17,28 @@ end
 
 local function get_explorer() return Snacks.picker.get({ source = "explorer" })[1] end
 
+--- Re-run the explorer finder but keep the cursor on the same file (and the same scroll offset). Snacks restores
+--- by list index, which lands elsewhere once the list is rebuilt or entries shift.
+local function find_keep(picker)
+  if picker.closed then return end
+  local item = picker:current()
+  local path, offset = item and item.file, picker.list.cursor - picker.list.top
+  picker.list:set_target()
+  picker:find {
+    on_done = function()
+      if not path or picker.closed then return end
+      for it, idx in picker:iter() do
+        if it.file == path then
+          picker.list:view(idx, math.max(1, idx - offset))
+          return
+        end
+      end
+    end,
+  }
+end
+
+local branch_changes -- assigned below (files that differ from the base branch, per git root)
+
 local MAX_UNTRACKED = 2000 -- files listed when an untracked directory is expanded in changed-only mode
 
 --- "Changed only" finder: same item shape as the explorer (tree items with parent/last/sort), but built from
@@ -30,20 +52,31 @@ local function changed_finder(_, ctx)
   ctx.picker.opts.changed_toggled = toggled
 
   local entries = {}
-  local run = require("snacks.picker.source.proc").proc({
-    cmd = "git",
-    cwd = root,
-    args = { "-c", "core.quotepath=off", "--no-pager", "--no-optional-locks", "status", "--porcelain=v1", "-unormal" },
-    notify = false,
-    transform = function(item)
-      local status, rel = item.text:match "^(..) (.+)$"
-      if status then
-        rel = (rel:match " %-> (.+)$" or rel):gsub('^"(.*)"$', "%1")
-        entries[#entries + 1] = { status = status, rel = rel }
-      end
-      return false
-    end,
-  }, ctx)
+  local run
+  if ctx.picker.opts.changed_only == "branch" then
+    -- files that differ from the base branch (committed on this branch); empty until the branch diff has loaded,
+    -- the finder re-runs once it has (see `finder` below)
+    local info = branch_changes[root]
+    if info and info.base then
+      for abs in pairs(info.files) do entries[#entries + 1] = { rel = abs:sub(#root + 2) } end
+    end
+    run = function() end
+  else
+    run = require("snacks.picker.source.proc").proc({
+      cmd = "git",
+      cwd = root,
+      args = { "-c", "core.quotepath=off", "--no-pager", "--no-optional-locks", "status", "--porcelain=v1", "-unormal" },
+      notify = false,
+      transform = function(item)
+        local status, rel = item.text:match "^(..) (.+)$"
+        if status then
+          rel = (rel:match " %-> (.+)$" or rel):gsub('^"(.*)"$', "%1")
+          entries[#entries + 1] = { status = status, rel = rel }
+        end
+        return false
+      end,
+    }, ctx)
+  end
 
   return function(cb)
     run(function() end)
@@ -125,7 +158,7 @@ end
 ---   3. auto: the local branch (or the remote default branch) with the fewest commits that HEAD has and it lacks.
 ---      Remote branches are not scanned: with thousands of refs every `--contains` query takes ~15s.
 ---@type table<string, {files: table<string, true>, dirs: table<string, true>, base: string?}>
-local branch_changes = {}
+branch_changes = {}
 local detected_base = {} ---@type table<string, string|false> auto-detected base per "root:branch", once per session
 
 local function git_async(root, args, cb)
@@ -181,18 +214,22 @@ local function refresh_branch_changes(root, on_done)
   local function diff(base)
     git_async(root, { "merge-base", base, "HEAD" }, function(mb)
       if not mb then return end
-      git_async(root, { "diff", "--name-only", "--no-renames", "--diff-filter=d", mb, "HEAD" }, function(out)
-        local files, dirs = {}, {} -- dirs: every directory that contains a changed file
-        for rel in (out or ""):gmatch "[^\n]+" do
+      git_async(root, { "diff", "--numstat", "--no-renames", "--diff-filter=d", mb, "HEAD" }, function(out)
+        local files, dirs, stats = {}, {}, {} -- dirs: every directory that contains a changed file
+        for line in (out or ""):gmatch "[^\n]+" do
+          local added, removed, rel = line:match "^(%S+)\t(%S+)\t(.+)$" -- binary files report "-" for both
+          if not rel then goto continue end
           local abs = root .. "/" .. rel
           files[abs] = true
+          stats[abs] = { add = tonumber(added), del = tonumber(removed) }
           local d = vim.fs.dirname(abs)
           while #d > #root and not dirs[d] do
             dirs[d] = true
             d = vim.fs.dirname(d)
           end
+          ::continue::
         end
-        branch_changes[root] = { files = files, dirs = dirs, base = base }
+        branch_changes[root] = { files = files, dirs = dirs, stats = stats, base = base, mb = mb }
         on_done()
       end)
     end)
@@ -210,6 +247,39 @@ local function refresh_branch_changes(root, on_done)
       end)
     end)
   end)
+end
+
+--- Review mode (explorer `gb`): gitsigns diffs every buffer against the merge-base with the base branch instead of
+--- the index, so opened files show the lines added/changed/removed on this branch (signs, line highlight, deleted
+--- lines as virtual text). Previous gitsigns settings are restored when the mode ends.
+local review_prev ---@type {linehl: boolean, deleted: boolean}?
+
+---@param picker snacks.Picker
+local function sync_review(picker, off)
+  local ok, gs = pcall(require, "gitsigns")
+  if not ok then return end
+  local root = picker.opts.branch_root
+  local want = root and not off and picker.opts.changed_only == "branch"
+  if not want then
+    if review_prev then
+      gs.change_base(nil, true)
+      gs.toggle_linehl(review_prev.linehl)
+      gs.toggle_deleted(review_prev.deleted)
+      review_prev = nil
+    end
+    return
+  end
+  local info = branch_changes[root]
+  if not (info and info.mb) then -- branch diff still loading: retry once it has
+    return refresh_branch_changes(root, function()
+      if not picker.closed and picker.opts.changed_only == "branch" then sync_review(picker) end
+    end)
+  end
+  local cfg = require("gitsigns.config").config
+  review_prev = review_prev or { linehl = cfg.linehl, deleted = cfg.show_deleted }
+  gs.change_base(info.mb, true)
+  gs.toggle_linehl(true)
+  gs.toggle_deleted(true)
 end
 
 ---@param picker snacks.Picker
@@ -290,9 +360,8 @@ return {
             if not picker or picker.closed then return end
             require("snacks.explorer.git").refresh(picker:cwd())
             local root = picker.opts.branch_root
-            if root then refresh_branch_changes(root, function() if not picker.closed then picker:find() end end) end
-            picker.list:set_target()
-            picker:find()
+            if root then refresh_branch_changes(root, function() find_keep(picker) end) end
+            find_keep(picker)
           end)
         end,
       })
@@ -328,6 +397,7 @@ return {
             git_status = true,
             git_untracked = true,
             watch = false,
+            on_close = function(picker) sync_review(picker, true) end,
             finder = function(opts, ctx)
               local root = Snacks.git.get_root(ctx.filter.cwd)
               ctx.picker.opts.branch_root = root
@@ -351,12 +421,41 @@ return {
                   if not (node and node.status) then item.filename_hl = "SnacksExplorerDimDir" end
                 end
               end
-              return Snacks.picker.format.file(item, picker)
+              local ret = Snacks.picker.format.file(item, picker)
+              -- gb mode: right-aligned "+added -removed" line counts vs the base branch
+              local stat = picker.opts.changed_only == "branch" and not item.dir and info and info.stats
+                and info.stats[item.file]
+              if stat then
+                local virt = {}
+                if stat.add and stat.add > 0 then virt[#virt + 1] = { "+" .. stat.add, "Added" } end
+                if stat.del and stat.del > 0 then
+                  if #virt > 0 then virt[#virt + 1] = { " " } end
+                  virt[#virt + 1] = { "-" .. stat.del, "Removed" }
+                end
+                if #virt == 0 then virt[1] = { "bin", "Comment" } end -- binary: git gives no line counts
+                virt[#virt + 1] = { " " }
+                ret[#ret + 1] = { col = 0, virt_text = virt, virt_text_pos = "right_align", hl_mode = "combine" }
+              end
+              return ret
             end,
             actions = {
+              -- gc: all files <-> uncommitted changes (git status); from branch mode it switches to this one
               toggle_changed_only = function(picker)
-                picker.opts.changed_only = not picker.opts.changed_only
+                picker.opts.changed_only = picker.opts.changed_only ~= true and true or nil
                 Snacks.notify(picker.opts.changed_only and "Explorer: changed files only" or "Explorer: all files")
+                sync_review(picker)
+                picker:find()
+              end,
+              -- gb: all files <-> files that differ from the base branch (the ones not dimmed in the full tree)
+              toggle_branch_only = function(picker)
+                picker.opts.changed_only = picker.opts.changed_only ~= "branch" and "branch" or nil
+                local info = branch_changes[picker.opts.branch_root or ""]
+                Snacks.notify(
+                  picker.opts.changed_only
+                      and ("Explorer: files differing from " .. ((info and info.base) or "base (loading...)"))
+                    or "Explorer: all files"
+                )
+                sync_review(picker)
                 picker:find()
               end,
               -- expand/collapse in changed-only mode doesn't go through the explorer's Tree, so handle it here
@@ -380,6 +479,7 @@ return {
                 wo = { wrap = false, linebreak = false },
                 keys = {
                   gc = "toggle_changed_only",
+                  gb = "toggle_branch_only",
                   l = "explorer_confirm",
                   ["<CR>"] = "explorer_confirm",
                   ["<2-LeftMouse>"] = "explorer_confirm",
