@@ -322,8 +322,34 @@ return {
         -- source groups must be the base ones: snacks' own groups don't exist yet when this runs at startup
         dim("SnacksExplorerDim", "Normal")
         dim("SnacksExplorerDimDir", "Directory")
+
+        -- the file open in the editor (explorer unfocused) is the cursor line, which is nearly invisible with the
+        -- stock CursorLine. Window-local override for the explorer list only: the theme's selection colour
+        -- (Visual) toned down toward the background. Focused state uses SnacksPickerListCursorLine, untouched.
+        local ACTIVE = 0.75 -- share of the selection colour; higher = more prominent
+        local vis = vim.api.nvim_get_hl(0, { name = "Visual", link = false }).bg or 0x204182
+        local function mix_bg(shift)
+          local v, b = bit.band(bit.rshift(vis, shift), 0xff), bit.band(bit.rshift(bg, shift), 0xff)
+          return bit.lshift(math.floor(v * ACTIVE + b * (1 - ACTIVE) + 0.5), shift)
+        end
+        vim.api.nvim_set_hl(vim.api.nvim_create_namespace "snacks_explorer_active", "CursorLine",
+          { bg = mix_bg(16) + mix_bg(8) + mix_bg(0), bold = true })
       end
       hl()
+
+      vim.api.nvim_create_autocmd({ "FileType", "BufWinEnter", "WinEnter" }, {
+        group = vim.api.nvim_create_augroup("snacks_explorer_active_hl", {}),
+        callback = function(ev)
+          if vim.bo[ev.buf].filetype ~= "snacks_picker_list" then return end
+          vim.schedule(function() -- the picker registers itself after the window exists
+            local picker = get_explorer()
+            local win = picker and not picker.closed and picker.list.win.win
+            if win and vim.api.nvim_win_is_valid(win) then
+              vim.api.nvim_win_set_hl_ns(win, vim.api.nvim_create_namespace "snacks_explorer_active")
+            end
+          end)
+        end,
+      })
 
       -- :ExplorerBase [ref|-]  show / set / clear (-) the base branch used for the "differs from base" marker
       vim.api.nvim_create_user_command("ExplorerBase", function(args)
