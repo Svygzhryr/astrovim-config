@@ -252,7 +252,11 @@ end
 --- Review mode (explorer `gb`): gitsigns diffs every buffer against the merge-base with the base branch instead of
 --- the index, so opened files show the lines added/changed/removed on this branch (signs, line highlight, deleted
 --- lines as virtual text). Previous gitsigns settings are restored when the mode ends.
-local review_prev ---@type {linehl: boolean, deleted: boolean}?
+---
+--- ignore_whitespace_change_at_eol is required on Windows with core.autocrlf=true: for a commit base gitsigns
+--- reads the raw LF blob but appends \r to the CRLF buffer lines, so every line differs and whole files show as
+--- rewritten (the index base goes through git's filters and is unaffected).
+local review_prev ---@type {linehl: boolean, deleted: boolean, iwhiteeol: boolean?}?
 
 ---@param picker snacks.Picker
 local function sync_review(picker, off)
@@ -260,8 +264,10 @@ local function sync_review(picker, off)
   if not ok then return end
   local root = picker.opts.branch_root
   local want = root and not off and picker.opts.changed_only == "branch"
+  local cfg = require("gitsigns.config").config
   if not want then
     if review_prev then
+      cfg.diff_opts.ignore_whitespace_change_at_eol = review_prev.iwhiteeol
       gs.change_base(nil, true)
       gs.toggle_linehl(review_prev.linehl)
       gs.toggle_deleted(review_prev.deleted)
@@ -275,8 +281,9 @@ local function sync_review(picker, off)
       if not picker.closed and picker.opts.changed_only == "branch" then sync_review(picker) end
     end)
   end
-  local cfg = require("gitsigns.config").config
-  review_prev = review_prev or { linehl = cfg.linehl, deleted = cfg.show_deleted }
+  review_prev = review_prev
+    or { linehl = cfg.linehl, deleted = cfg.show_deleted, iwhiteeol = cfg.diff_opts.ignore_whitespace_change_at_eol }
+  cfg.diff_opts.ignore_whitespace_change_at_eol = true
   gs.change_base(info.mb, true)
   gs.toggle_linehl(true)
   gs.toggle_deleted(true)
